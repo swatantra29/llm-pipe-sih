@@ -1,0 +1,224 @@
+"""
+QUICKSTART GUIDE - Atmospheric Data Analysis API
+=================================================
+
+This guide will get you up and running in 5 minutes.
+
+STEP 1: INSTALL DEPENDENCIES
+-----------------------------
+pip install -r requirements.txt
+
+STEP 2: CONFIGURE API KEY
+--------------------------
+1. Get a free Gemini API key from: https://makersuite.google.com/app/apikey
+2. Open .env file and replace 'your_gemini_api_key_here' with your actual key:
+   
+   GEMINI_API_KEY=AIzaSy...your_actual_key
+   DATA_PATH=forecasted_data.parquet
+
+STEP 3: GENERATE SAMPLE DATA
+-----------------------------
+python generate_sample_data.py
+
+This creates 30 days of synthetic atmospheric data with:
+- Pollutants: SO2, NO2, O3, PM2.5, PM10, CO
+- Meteorology: Temperature, Humidity, Wind, Pressure
+- Realistic patterns: Diurnal cycles, exceedance events, correlations
+
+STEP 4: VERIFY SETUP
+---------------------
+python setup_check.py
+
+This checks:
+✓ Dependencies installed
+✓ API key configured
+✓ Data file exists
+
+STEP 5: START THE API
+----------------------
+python api.py
+
+Or with auto-reload:
+uvicorn api:app --reload
+
+The API runs at: http://localhost:8000
+Interactive docs: http://localhost:8000/docs
+
+STEP 6: TEST THE API
+--------------------
+In a new terminal:
+python test_client.py
+
+Or try the examples:
+python examples.py
+
+QUICK API USAGE
+===============
+
+1. HEALTH CHECK
+   curl http://localhost:8000/
+
+2. GET DATA SUMMARY
+   curl http://localhost:8000/data/summary
+
+3. EXECUTE FUNCTION DIRECTLY
+   curl -X POST http://localhost:8000/execute/functions \
+     -H "Content-Type: application/json" \
+     -d '{
+       "function_calls": [{
+         "function": "compute_statistics",
+         "arguments": {
+           "column": "O3_ppm",
+           "metrics": ["mean", "max"]
+         }
+       }]
+     }'
+
+4. NATURAL LANGUAGE QUERY
+   curl -X POST http://localhost:8000/query \
+     -H "Content-Type: application/json" \
+     -d '{
+       "query": "What is the average PM2.5 concentration?"
+     }'
+
+5. SIMPLE QUERY (answer only)
+   curl -X POST "http://localhost:8000/query/simple?query=When%20did%20O3%20peak?"
+
+EXAMPLE QUERIES
+===============
+
+Statistics:
+- "What's the average PM2.5 concentration?"
+- "Show me O3 levels by hour of day"
+- "What are the maximum pollutant concentrations?"
+
+Exceedances:
+- "When did PM2.5 exceed 35 μg/m³?"
+- "How many times did O3 exceed the EPA standard?"
+- "Find all pollution exceedance events"
+
+Correlations:
+- "What's the correlation between temperature and O3?"
+- "Is humidity related to PM2.5?"
+- "Does wind speed affect pollutant levels?"
+
+Lag Analysis:
+- "What's the lag between SO2 and PM2.5?"
+- "How long after NO2 increases does O3 increase?"
+
+Conditional:
+- "What's the average O3 on hot days above 30°C?"
+- "Show PM2.5 when wind speed is low"
+
+ARCHITECTURE OVERVIEW
+=====================
+
+┌─────────────┐
+│ User Query  │
+└──────┬──────┘
+       │
+       ▼
+┌─────────────────────────────┐
+│ LLM (Gemini)                │
+│ - Parse intent              │
+│ - Generate function calls   │
+└──────┬──────────────────────┘
+       │
+       ▼
+┌─────────────────────────────┐
+│ Function Executor           │
+│ - Extract features          │
+│ - Compute statistics        │
+│ - Find exceedances          │
+│ - Calculate correlations    │
+└──────┬──────────────────────┘
+       │
+       ▼
+┌─────────────────────────────┐
+│ Data Analysis (Polars)      │
+│ - All math done here        │
+│ - Zero LLM calculations     │
+└──────┬──────────────────────┘
+       │
+       ▼
+┌─────────────────────────────┐
+│ LLM Synthesis               │
+│ - Natural language output   │
+│ - Scientific context        │
+└──────┬──────────────────────┘
+       │
+       ▼
+┌─────────────┐
+│   Answer    │
+└─────────────┘
+
+KEY FEATURES
+============
+
+✅ No LLM Math: All calculations done by Python/Polars
+✅ Structured Functions: JSON-based function calling
+✅ Domain Knowledge: Atmospheric science context built-in
+✅ Validation: Ensures LLM doesn't perform calculations
+✅ Flexible: Add new functions easily
+✅ Fast: Polars for high-performance data analysis
+
+TROUBLESHOOTING
+===============
+
+Problem: "Data not loaded"
+Solution: Run `python generate_sample_data.py`
+
+Problem: "GEMINI_API_KEY not found"
+Solution: Edit .env file and add your API key
+
+Problem: API won't start
+Solution: Check port 8000 is not in use, or change port in api.py
+
+Problem: LLM returns invalid JSON
+Solution: The system tries to parse JSON from markdown blocks automatically
+
+Problem: Function execution errors
+Solution: Check column names match your data schema exactly
+
+USING YOUR OWN DATA
+===================
+
+Replace forecasted_data.parquet with your own data.
+
+Required columns:
+- timestamp (datetime)
+- At least one pollutant column
+
+Optional columns enhance functionality:
+- Meteorological variables (temperature, humidity, wind, pressure)
+- Additional pollutants
+
+Example:
+import polars as pl
+
+df = pl.DataFrame({
+    'timestamp': [...],
+    'PM25_ugm3': [...],
+    'temperature_C': [...]
+})
+
+df.write_parquet('forecasted_data.parquet')
+
+NEXT STEPS
+==========
+
+1. Explore the interactive docs: http://localhost:8000/docs
+2. Run examples: python examples.py
+3. Add custom functions to analyzer.py
+4. Customize the system prompt in llm_client.py
+5. Add domain-specific analysis functions
+
+SUPPORT
+=======
+
+- Check README.md for detailed documentation
+- Run examples.py for usage demonstrations
+- Inspect analyzer.py for available functions
+- Review llm_client.py for prompt engineering
+
+Happy analyzing! 🌍💨📊

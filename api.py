@@ -9,10 +9,13 @@ from typing import Dict, List, Any, Optional
 import polars as pl
 from datetime import datetime
 import os
+import json
 from dotenv import load_dotenv
 
 from analyzer import AtmosphericDataAnalyzer, FunctionExecutor
 from llm_client import GeminiLLM
+from llm_pipeline import EnhancedLLMPipeline
+from function_registry import create_analyzer_registry
 
 # Load environment variables
 load_dotenv()
@@ -36,6 +39,7 @@ app.add_middleware(
 analyzer: Optional[AtmosphericDataAnalyzer] = None
 executor: Optional[FunctionExecutor] = None
 llm_client: Optional[GeminiLLM] = None
+enhanced_pipeline: Optional[EnhancedLLMPipeline] = None
 data_summary: Optional[Dict] = None
 
 
@@ -83,7 +87,7 @@ class QueryResponse(BaseModel):
 @app.on_event("startup")
 async def startup_event():
     """Initialize data and LLM client on startup"""
-    global analyzer, executor, llm_client, data_summary
+    global analyzer, executor, llm_client, enhanced_pipeline, data_summary
     
     # Load data
     data_path = os.getenv("DATA_PATH", "forecasted_data.parquet")
@@ -106,7 +110,13 @@ async def startup_event():
         api_key = os.getenv("GEMINI_API_KEY")
         if api_key:
             llm_client = GeminiLLM(api_key)
-            print("✓ Gemini LLM initialized")
+            print("✓ Gemini LLM initialized (legacy)")
+            
+            # Initialize enhanced pipeline with dynamic function discovery
+            function_registry = create_analyzer_registry(analyzer)
+            enhanced_pipeline = EnhancedLLMPipeline(api_key, function_registry)
+            print("✓ Enhanced LLM Pipeline initialized (context-driven)")
+            print(f"  Registered {len(function_registry.list_functions())} functions dynamically")
         else:
             print("WARNING: GEMINI_API_KEY not found in environment")
             print("Set it in .env file or environment variables")
@@ -122,7 +132,8 @@ async def root():
         "status": "online",
         "service": "Atmospheric Data Analysis API",
         "data_loaded": analyzer is not None,
-        "llm_available": llm_client is not None
+        "llm_available": llm_client is not None,
+        "enhanced_pipeline_available": enhanced_pipeline is not None
     }
 
 
@@ -246,6 +257,67 @@ async def query_simple(query: str = Query(..., description="Natural language que
         )
         
         return {"answer": synthesis}
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/query/enhanced", response_model=QueryResponse)
+async def query_enhanced(request: QueryRequest):
+    """
+    Enhanced query endpoint using dynamic function discovery and context-driven reasoning.
+    This endpoint uses the enhanced LLM pipeline that works primarily from context.
+    """
+    if analyzer is None:
+        raise HTTPException(status_code=503, detail="Data not loaded")
+    
+    if enhanced_pipeline is None:
+        raise HTTPException(status_code=503, detail="Enhanced pipeline not initialized. Check GEMINI_API_KEY")
+    
+    try:
+        result = enhanced_pipeline.process_query(
+            user_query=request.query,
+            data_summary=data_summary,
+            executor=executor
+        )
+        
+        if "error" in result:
+            return QueryResponse(
+                query=result['query'],
+                error=result.get('error'),
+                answer=result.get('raw_response')
+            )
+        
+        return QueryResponse(
+            query=result['query'],
+            intent_analysis=json.dumps(result.get('query_analysis', {})),
+            reasoning=result.get('reasoning'),
+            function_calls=result.get('function_calls'),
+            function_results=result.get('function_results'),
+            answer=result.get('answer')
+        )
+    
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/query/enhanced/simple")
+async def query_enhanced_simple(query: str = Query(..., description="Natural language query")):
+    """Enhanced query endpoint (returns only the answer) using context-driven pipeline"""
+    if analyzer is None or enhanced_pipeline is None:
+        raise HTTPException(status_code=503, detail="Service not ready")
+    
+    try:
+        result = enhanced_pipeline.process_query(
+            user_query=query,
+            data_summary=data_summary,
+            executor=executor
+        )
+        
+        if "error" in result:
+            return {"error": result.get('error')}
+        
+        return {"answer": result.get('answer')}
     
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

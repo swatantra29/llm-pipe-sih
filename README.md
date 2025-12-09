@@ -13,6 +13,8 @@ User Query → LLM (Gemini) → Function Calls → Data Analysis (Polars) → LL
 - ✅ All calculations done by Python/Polars (zero LLM math)
 - ✅ Structured function calling via JSON
 - ✅ Domain-specific atmospheric science context
+- ✅ **NEW: Dynamic function discovery** - system works from context
+- ✅ **NEW: Context-driven reasoning** - no hardcoded query logic
 
 ## Quick Start
 
@@ -127,6 +129,25 @@ Natural language query (returns only answer)
 POST /query/simple?query=What's the average O3 concentration?
 ```
 
+### POST `/query/enhanced`
+**NEW**: Enhanced natural language query using context-driven pipeline (full details)
+
+**Example:**
+```json
+{
+  "query": "What's the correlation between temperature and O3?"
+}
+```
+
+**Features:**
+- Dynamic function discovery
+- Context-driven reasoning
+- Structured query analysis
+- No hardcoded logic
+
+### POST `/query/enhanced/simple`
+**NEW**: Enhanced query (returns only answer) using context-driven pipeline
+
 ## Available Functions
 
 ### 1. `extract_feature`
@@ -188,15 +209,58 @@ Filter data by multiple meteorological conditions
 - "What's the average O3 on hot days (>30°C)?"
 - "What are PM2.5 levels when wind speed is low?"
 
+## Enhanced Pipeline Features
+
+### Context-Driven Architecture
+
+The enhanced pipeline (`llm_pipeline.py`) works primarily from context with minimal hardcoded logic:
+
+**Dynamic Function Discovery**
+- Functions automatically discovered via introspection
+- Signatures, parameters, and return types extracted automatically
+- System prompts generated dynamically from function metadata
+- Add new functions → automatically available to LLM
+
+**Context-Driven Reasoning**
+- LLM determines what to do from system prompt + user query only
+- Multi-phase reasoning: Analysis → Planning → Execution → Synthesis
+- Structured query analysis (intent, variables, scope, conditions)
+- No hardcoded rules for query interpretation
+
+**Self-Documenting**
+- Function registry maintains metadata (descriptions, examples, domain knowledge)
+- Documentation flows from code to LLM automatically
+- Changes propagate without manual updates
+
+### Try the Enhanced Pipeline
+
+```bash
+# Run demonstration
+python demo_enhanced.py
+
+# Run tests
+python test_enhanced_pipeline.py
+
+# Use enhanced endpoints
+curl -X POST http://localhost:8000/query/enhanced \
+  -H "Content-Type: application/json" \
+  -d '{"query": "What is the correlation between temperature and O3?"}'
+```
+
 ## Project Structure
 
 ```
 .
 ├── api.py                      # FastAPI application
 ├── analyzer.py                 # Data analysis functions (Polars)
-├── llm_client.py              # Gemini LLM integration
+├── llm_client.py              # Gemini LLM integration (legacy)
+├── llm_pipeline.py            # Enhanced context-driven pipeline (NEW)
+├── function_registry.py       # Dynamic function discovery (NEW)
 ├── generate_sample_data.py    # Sample data generator
 ├── test_client.py             # Test client
+├── test_enhanced_pipeline.py  # Enhanced pipeline tests (NEW)
+├── demo_enhanced.py           # Enhanced pipeline demo (NEW)
+├── examples.py                # Usage examples
 ├── requirements.txt           # Dependencies
 ├── .env.example              # Environment template
 └── README.md                 # This file
@@ -212,7 +276,33 @@ Optional meteorological columns enhance analysis capabilities.
 
 ## Development
 
-### Adding New Functions
+### Adding New Functions (Enhanced Pipeline)
+
+With the enhanced pipeline, adding functions is easier:
+
+1. Add method to `AtmosphericDataAnalyzer` class in `analyzer.py`
+2. Register in `function_registry.py` with description, examples, and domain knowledge
+3. Function automatically appears in system prompt and becomes available to LLM
+4. Test with `/execute/functions` endpoint first
+
+**Example:**
+```python
+# In analyzer.py
+def compute_aqi(self, column: str) -> Dict[str, Any]:
+    """Calculate Air Quality Index"""
+    # Implementation
+    return {"aqi": value}
+
+# In function_registry.py (create_analyzer_registry)
+registry.register(
+    analyzer.compute_aqi,
+    description="Calculate Air Quality Index from pollutant concentration",
+    examples=["Calculate AQI for PM2.5"],
+    domain_knowledge="AQI scale: 0-50 Good, 51-100 Moderate, 101-150 Unhealthy for sensitive groups"
+)
+```
+
+### Adding New Functions (Legacy Pipeline)
 
 1. Add method to `AtmosphericDataAnalyzer` class in `analyzer.py`
 2. Update system prompt in `llm_client.py` to document the new function

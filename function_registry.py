@@ -39,7 +39,8 @@ class FunctionRegistry:
         # Extract parameter information
         parameters = {}
         for param_name, param in sig.parameters.items():
-            if param_name == 'self':
+            # Skip self, *args, and **kwargs
+            if self._should_skip_parameter(param_name, param):
                 continue
                 
             param_info = {
@@ -74,6 +75,16 @@ class FunctionRegistry:
             type_str = type_str.replace('typing.', '')
         
         return type_str
+    
+    def _should_skip_parameter(self, param_name: str, param: inspect.Parameter) -> bool:
+        """Check if parameter should be skipped during registration"""
+        # Skip 'self' for methods
+        if param_name == 'self':
+            return True
+        # Skip *args and **kwargs
+        if param.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD):
+            return True
+        return False
     
     def get_function(self, name: str) -> Optional[FunctionMetadata]:
         """Get metadata for a function"""

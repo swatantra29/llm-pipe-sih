@@ -22,8 +22,8 @@ def test_function_registry():
     
     # Load data
     if not os.path.exists("forecasted_data.parquet"):
-        print("❌ Data file not found. Run: python generate_sample_data.py")
-        return False
+        print("⚠️  SKIPPED: Data file not found. Run: python generate_sample_data.py")
+        return None  # None indicates skipped, not failed
     
     df = pl.read_parquet("forecasted_data.parquet")
     analyzer = AtmosphericDataAnalyzer(df)
@@ -61,8 +61,8 @@ def test_system_prompt_generation():
     api_key = os.getenv("GEMINI_API_KEY")
     
     if not api_key or api_key == "your_gemini_api_key_here":
-        print("⚠️  Skipping: GEMINI_API_KEY not set")
-        return False
+        print("⚠️  SKIPPED: GEMINI_API_KEY not set")
+        return None
     
     df = pl.read_parquet("forecasted_data.parquet")
     analyzer = AtmosphericDataAnalyzer(df)
@@ -115,8 +115,8 @@ def test_query_processing():
     api_key = os.getenv("GEMINI_API_KEY")
     
     if not api_key or api_key == "your_gemini_api_key_here":
-        print("⚠️  Skipping: GEMINI_API_KEY not set")
-        return False
+        print("⚠️  SKIPPED: GEMINI_API_KEY not set")
+        return None
     
     df = pl.read_parquet("forecasted_data.parquet")
     analyzer = AtmosphericDataAnalyzer(df)
@@ -176,8 +176,8 @@ def test_function_call_validation():
     api_key = os.getenv("GEMINI_API_KEY")
     
     if not api_key or api_key == "your_gemini_api_key_here":
-        print("⚠️  Skipping: GEMINI_API_KEY not set")
-        return False
+        print("⚠️  SKIPPED: GEMINI_API_KEY not set")
+        return None
     
     df = pl.read_parquet("forecasted_data.parquet")
     analyzer = AtmosphericDataAnalyzer(df)
@@ -242,8 +242,8 @@ def test_no_calculations():
     api_key = os.getenv("GEMINI_API_KEY")
     
     if not api_key or api_key == "your_gemini_api_key_here":
-        print("⚠️  Skipping: GEMINI_API_KEY not set")
-        return False
+        print("⚠️  SKIPPED: GEMINI_API_KEY not set")
+        return None
     
     df = pl.read_parquet("forecasted_data.parquet")
     analyzer = AtmosphericDataAnalyzer(df)
@@ -307,15 +307,22 @@ def main():
     print("TEST SUMMARY")
     print("=" * 70)
     
-    passed = sum(1 for v in results.values() if v)
+    passed = sum(1 for v in results.values() if v is True)
+    skipped = sum(1 for v in results.values() if v is None)
+    failed = sum(1 for v in results.values() if v is False)
     total = len(results)
     
     for test_name, result in results.items():
-        status = "✅ PASSED" if result else "⚠️  SKIPPED"
+        if result is True:
+            status = "✅ PASSED"
+        elif result is None:
+            status = "⚠️  SKIPPED"
+        else:
+            status = "❌ FAILED"
         print(f"{test_name}: {status}")
     
     print()
-    print(f"Total: {passed}/{total} tests passed")
+    print(f"Total: {passed} passed, {skipped} skipped, {failed} failed out of {total} tests")
     print("=" * 70)
 
 

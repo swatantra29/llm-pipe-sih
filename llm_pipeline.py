@@ -8,6 +8,7 @@ from typing import Dict, List, Any, Optional
 import json
 import re
 from function_registry import FunctionRegistry
+from schema_config import build_schema_table
 
 
 class EnhancedLLMPipeline:
@@ -28,27 +29,8 @@ class EnhancedLLMPipeline:
     def build_dynamic_system_prompt(self, data_summary: Dict[str, Any]) -> str:
         """Build system prompt dynamically from function registry and data schema"""
         
-        # Build schema table
-        schema_table = "| Column Name | Data Type | Unit | Description |\n|------------|-----------|------|-------------|\n"
-        
-        column_info = {
-            'timestamp': ('DateTime', 'UTC', 'Hourly timestamps'),
-            'SO2_ppm': ('Float64', 'ppm', 'Sulfur dioxide concentration'),
-            'NO2_ppm': ('Float64', 'ppm', 'Nitrogen dioxide concentration'),
-            'O3_ppm': ('Float64', 'ppm', 'Ozone concentration'),
-            'PM25_ugm3': ('Float64', 'μg/m³', 'Particulate matter ≤2.5μm'),
-            'PM10_ugm3': ('Float64', 'μg/m³', 'Particulate matter ≤10μm'),
-            'CO_ppm': ('Float64', 'ppm', 'Carbon monoxide concentration'),
-            'temperature_C': ('Float64', '°C', 'Air temperature'),
-            'humidity_pct': ('Float64', '%', 'Relative humidity'),
-            'wind_speed_ms': ('Float64', 'm/s', 'Wind speed'),
-            'pressure_hPa': ('Float64', 'hPa', 'Atmospheric pressure'),
-        }
-        
-        for col in data_summary['columns']:
-            if col in column_info:
-                dtype, unit, desc = column_info[col]
-                schema_table += f"| `{col}` | {dtype} | {unit} | {desc} |\n"
+        # Build schema table from shared configuration
+        schema_table = build_schema_table(data_summary['columns'])
         
         # Generate functions section from registry
         functions_section = self.registry.generate_system_prompt_section()
@@ -246,15 +228,29 @@ Always respond in this JSON structure:
         """Ensure LLM didn't perform calculations"""
         
         forbidden_patterns = [
-            r'\d+\s*[\+\-\*/]\s*\d+',  # "5 + 3"
-            r'=\s*\d+\.\d+',  # "= 4.5"
+            r'\d+\s*[\+\-\*/÷×]\s*\d+',  # "5 + 3", "10 / 2", "3 × 4"
+            r'=\s*\d+\.?\d*',  # "= 4.5", "= 4"
             r'equals\s+\d+',  # "equals 10"
             r'sum\s+is\s+\d+',  # "sum is 15"
             r'average\s+is\s+approximately\s+\d+',  # "average is approximately 15"
+            r'\d+\s*%\s*of\s*\d+',  # "50% of 100"
+            r'total\s+is\s+\d+',  # "total is 100"
         ]
         
+        # Check for calculation patterns
         for pattern in forbidden_patterns:
-            if re.search(pattern, response, re.IGNORECASE):
+            matches = re.finditer(pattern, response, re.IGNORECASE)
+            for match in matches:
+                # Get context around match to check if it's a false positive
+                start = max(0, match.start() - 20)
+                end = min(len(response), match.end() + 20)
+                context = response[start:end].lower()
+                
+                # Allow if it's part of a date, timestamp, or reference
+                if any(word in context for word in ['date', 'timestamp', ':', '/', 'iso', 'utc']):
+                    continue
+                
+                # This looks like an actual calculation
                 return False
         
         return True

@@ -7,6 +7,7 @@ import google.generativeai as genai
 from typing import Dict, List, Any, Optional
 import json
 import re
+from schema_config import build_schema_table
 
 
 class GeminiLLM:
@@ -20,27 +21,8 @@ class GeminiLLM:
     def build_system_prompt(self, data_summary: Dict[str, Any]) -> str:
         """Build system prompt with data schema"""
         
-        schema_table = "| Column Name | Data Type | Unit | Description |\n|------------|-----------|------|-------------|\n"
-        
-        # Default descriptions
-        column_info = {
-            'timestamp': ('DateTime', 'UTC', 'Hourly timestamps'),
-            'SO2_ppm': ('Float64', 'ppm', 'Sulfur dioxide concentration'),
-            'NO2_ppm': ('Float64', 'ppm', 'Nitrogen dioxide concentration'),
-            'O3_ppm': ('Float64', 'ppm', 'Ozone concentration'),
-            'PM25_ugm3': ('Float64', 'μg/m³', 'Particulate matter ≤2.5μm'),
-            'PM10_ugm3': ('Float64', 'μg/m³', 'Particulate matter ≤10μm'),
-            'CO_ppm': ('Float64', 'ppm', 'Carbon monoxide concentration'),
-            'temperature_C': ('Float64', '°C', 'Air temperature'),
-            'humidity_pct': ('Float64', '%', 'Relative humidity'),
-            'wind_speed_ms': ('Float64', 'm/s', 'Wind speed'),
-            'pressure_hPa': ('Float64', 'hPa', 'Atmospheric pressure'),
-        }
-        
-        for col in data_summary['columns']:
-            if col in column_info:
-                dtype, unit, desc = column_info[col]
-                schema_table += f"| `{col}` | {dtype} | {unit} | {desc} |\n"
+        # Build schema table from shared configuration
+        schema_table = build_schema_table(data_summary['columns'])
         
         system_prompt = f"""# ROLE
 You are an atmospheric science data analyst. You help researchers analyze forecasted air quality data by generating function calls. You NEVER perform calculations yourself—all math is done by external functions.
